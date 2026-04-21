@@ -36,9 +36,9 @@ labels = list(label_names.keys())
 csp_label = 4
 nsd_tolerance_mm = 2.0
 
-# =====================
-# FUNCTIONS
-# =====================
+
+
+#Functions 
 
 def load_image(path):
     img = sitk.ReadImage(path)
@@ -70,9 +70,7 @@ def nsd_score(pred, gt, spacing):
     return compute_surface_dice_at_tolerance(distances, nsd_tolerance_mm)
 
 
-# =====================
-# BUILD DATAFRAME PER MODEL
-# =====================
+# Dataframe setup
 
 def build_dataframe(model_folder):
 
@@ -138,9 +136,7 @@ def build_dataframe(model_folder):
     return pd.DataFrame(rows)
 
 
-# =====================
-# WRITE EXCEL MET HEADER STRUCTUUR
-# =====================
+# Setup excel
 
 def write_sheet(ws, df):
 
@@ -195,9 +191,7 @@ def write_sheet(ws, df):
         ws.append(row)
 
 
-# =====================
-# MAIN
-# =====================
+# Write excel 
 
 wb = Workbook()
 wb.remove(wb.active)

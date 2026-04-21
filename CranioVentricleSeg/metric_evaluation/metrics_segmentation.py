@@ -1,5 +1,5 @@
 # This file calculates Dice, NSD, volumes (RVE, AVE)
-# Uses median (no CSP unless present) + summary per model (median + IQR + 95% CI)
+# Uses median (no CSP unless present) + summary per model (median + IQR + cluster bootstrap CI)
 
 import os
 import numpy as np
@@ -22,7 +22,7 @@ model_folders = {
     "v2.0": "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/test_inference_v2.0",
 }
 
-output_path = "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/segmentation_metrics_v2.xlsx"
+output_path = "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/segmentation_metrics_v2_cluster_bootstrap.xlsx"
 
 
 # =====================
@@ -88,7 +88,7 @@ def compute_volumes(arr, spacing):
 
     for label, name in label_names.items():
         voxels = np.sum(arr == label)
-        volumes[name] = (voxels * voxel_volume) / 1000  # ml
+        volumes[name] = (voxels * voxel_volume) / 1000
 
     total = sum(volumes.values())
 
@@ -106,10 +106,11 @@ def compute_ave(pred_vol, gt_vol):
 
 
 # =====================
-# BOOTSTRAP CI (MEDIAN)
+# BOOTSTRAP METHODS
 # =====================
 
-def bootstrap_ci(data, n_boot=1000):
+# Observation-level bootstrap (not in use now)
+def bootstrap_ci_observation(data, n_boot=1000):
 
     data = np.array(data)
     data = data[~np.isnan(data)]
@@ -119,6 +120,25 @@ def bootstrap_ci(data, n_boot=1000):
 
     samples = np.random.choice(data, (n_boot, len(data)), replace=True)
     medians = np.median(samples, axis=1)
+
+    return np.percentile(medians, 2.5), np.percentile(medians, 97.5)
+
+
+# Cluster bootstrap (used in this file)
+def bootstrap_ci_cluster(df, value_col, patient_col="patient", n_boot=1000):
+
+    patients = df[patient_col].unique()
+    medians = []
+
+    for _ in range(n_boot):
+
+        sampled_patients = np.random.choice(patients, size=len(patients), replace=True)
+
+        sampled_df = pd.concat([
+            df[df[patient_col] == p] for p in sampled_patients
+        ])
+
+        medians.append(sampled_df[value_col].median())
 
     return np.percentile(medians, 2.5), np.percentile(medians, 97.5)
 
@@ -175,7 +195,6 @@ def build_dataframe(model_folder):
             row[f"rve_{name}"] = compute_rve(pred_volumes[name], gt_volumes[name])
             row[f"ave_{name}"] = compute_ave(pred_volumes[name], gt_volumes[name])
 
-            # CSP logic
             if name != "CSP":
                 if not np.isnan(d):
                     dice_list.append(d)
@@ -200,11 +219,16 @@ def build_dataframe(model_folder):
 
         rows.append(row)
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+
+    # patient ID voor cluster bootstrap
+    df["patient"] = df["case"].apply(lambda x: x.split("_")[0])
+
+    return df
 
 
 # =====================
-# SUMMARY (PER MODEL)
+# SUMMARY
 # =====================
 
 def compute_summary(df):
@@ -219,7 +243,7 @@ def compute_summary(df):
         summary[f"{name}_q1"] = vals.quantile(0.25)
         summary[f"{name}_q3"] = vals.quantile(0.75)
 
-        ci_low, ci_high = bootstrap_ci(vals)
+        ci_low, ci_high = bootstrap_ci_cluster(df, f"dice_{name}")
         summary[f"{name}_ci_low"] = ci_low
         summary[f"{name}_ci_high"] = ci_high
 
@@ -229,7 +253,7 @@ def compute_summary(df):
     summary["overall_q1"] = vals.quantile(0.25)
     summary["overall_q3"] = vals.quantile(0.75)
 
-    ci_low, ci_high = bootstrap_ci(vals)
+    ci_low, ci_high = bootstrap_ci_cluster(df, "dice_case_median")
     summary["overall_ci_low"] = ci_low
     summary["overall_ci_high"] = ci_high
 
@@ -237,86 +261,50 @@ def compute_summary(df):
 
 
 # =====================
-# WRITE METRICS SHEET
+# WRITE VOLUME SHEET (MOOIE LAYOUT)
 # =====================
 
-def write_sheet(ws, df):
+def write_volume_sheet(ws, df):
 
     top_headers = [
         "Case",
-        "RV","", "3V","", "4V","", "CSP","", "LV","",
-        "Overall per case","",
-        "Volumes","","",""
+        "Right ventricle","","","",
+        "3th ventricle","","","",
+        "4th ventricle","","","",
+        "CSP","","","",
+        "Left ventricle","","","",
+        "TOTAL",""
     ]
 
     sub_headers = [
         "Case",
-        "Dice","NSD",
-        "Dice","NSD",
-        "Dice","NSD",
-        "Dice","NSD",
-        "Dice","NSD",
-        "Dice","NSD",
-        "GT","Pred","RVE","AVE"
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred"
     ]
 
     ws.append(top_headers)
     ws.append(sub_headers)
 
-    merges = [(2,3),(4,5),(6,7),(8,9),(10,11),(12,13),(14,17)]
+    merges = [(2,5),(6,9),(10,13),(14,17),(18,21),(22,23)]
     for start, end in merges:
         ws.merge_cells(start_row=1, start_column=start, end_row=1, end_column=end)
 
     ws.merge_cells(start_row=1, start_column=1, end_row=2, end_column=1)
 
     for _, r in df.iterrows():
-
-        row = [
+        ws.append([
             r["case"],
-            r.get("dice_RV"), r.get("nsd_RV"),
-            r.get("dice_3V"), r.get("nsd_3V"),
-            r.get("dice_4V"), r.get("nsd_4V"),
-            r.get("dice_CSP"), r.get("nsd_CSP"),
-            r.get("dice_LV"), r.get("nsd_LV"),
-            r.get("dice_case_median"), r.get("nsd_case_median"),
-            r.get("GT_total"), r.get("Pred_total"),
-            r.get("rve_total"), r.get("ave_total"),
-        ]
-
-        ws.append(row)
-
-
-# =====================
-# VOLUME SHEET
-# =====================
-
-def build_volume_dataframe(df):
-
-    rows = []
-
-    for _, r in df.iterrows():
-
-        row = {"case": r["case"]}
-
-        for name in ordered_labels:
-            row[f"GT_{name}"] = r[f"GT_{name}"]
-            row[f"Pred_{name}"] = r[f"Pred_{name}"]
-            row[f"RVE_{name}"] = r[f"rve_{name}"]
-            row[f"AVE_{name}"] = r[f"ave_{name}"]
-
-        row["GT_total"] = r["GT_total"]
-        row["Pred_total"] = r["Pred_total"]
-        row["RVE_total"] = r["rve_total"]
-        row["AVE_total"] = r["ave_total"]
-
-        rows.append(row)
-
-    return pd.DataFrame(rows)
-
-
-def write_volume_sheet(ws, df):
-    for r in dataframe_to_rows(df, index=False, header=True):
-        ws.append(r)
+            r["GT_RV"], r["Pred_RV"], r["rve_RV"], r["ave_RV"],
+            r["GT_3V"], r["Pred_3V"], r["rve_3V"], r["ave_3V"],
+            r["GT_4V"], r["Pred_4V"], r["rve_4V"], r["ave_4V"],
+            r["GT_CSP"], r["Pred_CSP"], r["rve_CSP"], r["ave_CSP"],
+            r["GT_LV"], r["Pred_LV"], r["rve_LV"], r["ave_LV"],
+            r["GT_total"], r["Pred_total"]
+        ])
 
 
 # =====================
@@ -334,16 +322,16 @@ for model_name, model_folder in model_folders.items():
     summary = compute_summary(df)
 
     ws1 = wb.create_sheet(title=f"{model_name}_metrics")
-    write_sheet(ws1, df)
+    for r in dataframe_to_rows(df, index=False, header=True):
+        ws1.append(r)
 
     ws1.append([])
-    ws1.append(["SUMMARY (per model)"])
+    ws1.append(["SUMMARY"])
     for k, v in summary.items():
         ws1.append([k, v])
 
-    df_vol = build_volume_dataframe(df)
     ws2 = wb.create_sheet(title=f"{model_name}_volumes")
-    write_volume_sheet(ws2, df_vol)
+    write_volume_sheet(ws2, df)
 
 wb.save(output_path)
 
