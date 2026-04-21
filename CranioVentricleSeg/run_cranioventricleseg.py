@@ -1,5 +1,5 @@
 """
-This module provides functionality to run the ventricle segmentation process.
+This module provides functionality to run the ventricle segmentation process, specific for T2 images.
 The main function `run_ventricle_segmentation` initializes the segmentation process
 and logs the progress.
 Functions:
@@ -22,7 +22,7 @@ from utils.logger_utils import CranioLogger
 
 
 def run_ventricle_segmentation(
-    t1_path: str,
+    t2_path: str,
     logger=logging.Logger,
     patient_name: str = "",
     device: str = "cpu",
@@ -38,9 +38,9 @@ def run_ventricle_segmentation(
 
     logger.info("Run preprocessing")
     preprocessed_image_path = cranio_preprocessing.run_cranio_preprocessing(
-        t1_path=t1_path, logger=logger, device=device
+        t2_path=t2_path, logger=logger, device=device
     )
-    # preprocessed_image_path = t1_path.replace(".nii.gz", "_masked.nii.gz")
+    # preprocessed_image_path = t2_path.replace(".nii.gz", "_masked.nii.gz")
     logger.info(f"Preprocessed image path: {preprocessed_image_path}")
 
     logger.info("Run ventricle segmentation")
@@ -77,9 +77,14 @@ def main(args: argparse.Namespace):
 
     if args.subcommand == "file_based":
         logger.info("Running file-based ventricle segmentation")
-        t1_path = os.path.join(args.folder_name, "T1w/T1w.nii.gz")
+        t2_path = os.path.join(args.folder_name, "T2w/T2w_registered.nii.gz")
         patient_name = os.path.basename(args.folder_name)
         cranio_logger.update_logger_folder(args.folder_name)
+
+     #if no T2 available, skip patient
+        if not os.path.exists(t2_path):
+            logger.warning(f"T2 not found for patient {args.folder_name}, skipping...")
+            return
 
     elif args.subcommand == "xnat_based":
         logger.info("Running XNAT-based ventricle segmentation")
@@ -91,19 +96,19 @@ def main(args: argparse.Namespace):
         cranio_logger.update_logger_folder(args.folder_name)
 
         logger.info("Transforming dicom to nifti")
-        t1_path = xnat_extraction.dicom_to_nifti(
+        t2_path = xnat_extraction.dicom_to_nifti(
             patient_path=args.folder_name,
-            save_path=os.path.join(args.folder_name, "T1w"),
-            filename="T1w",
+            save_path=os.path.join(args.folder_name, "T2w"),
+            filename="T2w_registered",
             logger=logger,
         )
         patient_name = os.path.basename(args.folder_name)
 
     logger.info(f"Patient name: {patient_name}")
-    logger.info(f"Path to T1w: {t1_path}")
+    logger.info(f"Path to T2w: {t2_path}")
     logger.info("Start running ventricle segmentation")
     run_ventricle_segmentation(
-        t1_path=t1_path,
+        t2_path=t2_path,
         logger=logger,
         patient_name=patient_name,
         device=args.device,

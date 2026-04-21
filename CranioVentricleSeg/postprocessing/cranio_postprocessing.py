@@ -1,3 +1,5 @@
+#The file is updated so earlier model data files are not overruled if a new model run is done 
+
 import logging
 import os
 
@@ -16,6 +18,7 @@ def run_cranio_postprocessing(
 ) -> str:
 
     logger.info("Running cranio postprocessing")
+
     # Load the image
     logger.info("Loading the image")
     image_nib, image_data = common_utils.load_image(image_path)
@@ -51,21 +54,23 @@ def run_cranio_postprocessing(
     )
     logger.info("Finished calculating ventricle volume")
 
-    # Save the image
-    logger.info
-    # save_path = image_path.replace(".nii.gz", "_postprocessed.nii.gz")
-    save_path = image_path
+    # Save the image. Segmentation saved to different folder than patient data 
+    output_folder = f"/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/test_inference_{model_version}"
+    os.makedirs(output_folder, exist_ok=True)
+
+    save_path = os.path.join(output_folder, f"{patient_name}.nii.gz")
+
     common_utils.save_image(
         image_data=image_data,
         affine=image_nib.affine,
         header=image_nib.header,
         save_path=save_path,
     )
-    logger.info("The postprocessed image has been saved")
 
+    logger.info("The postprocessed image has been saved")
     logger.info("Postprocessing done")
 
-    return image_path
+    return save_path
 
 
 def calculate_brain_volume(
@@ -75,96 +80,56 @@ def calculate_brain_volume(
     patient_name: str,
     logger: logging.Logger,
 ) -> float:
-    """
-    Calculate the volume of the brain in a medical image and save the results to an Excel file.
-    Parameters:
-    image_data (numpy.ndarray): The image data array where the brain region is labeled with integers.
-    image_nib (nibabel.Nifti1Image): The NIfTI image object containing header information.
-    excel_path (str): The file path to the Excel file where the results will be saved.
-    patient_name (str): The name of the patient whose data is being processed.
-    logger (logging.Logger): Logger object for logging information.
-    Returns:
-    float: The total volume of the brain in cubic centimeters (cm^3).
-    """
 
     logger.info("Calculating brain volume")
 
-    # Calculate the volume
     dimensions_voxel = image_nib.header.get_zooms()
     volume_voxel = dimensions_voxel[0] * dimensions_voxel[1] * dimensions_voxel[2]
     image_data = image_data.astype("i")
 
-    voxels_brain = np.sum(
-        image_data > 0
-    )  # Assuming brain is labeled with positive integers
+    voxels_brain = np.sum(image_data > 0)
+    volume_brain_cm = (volume_voxel * voxels_brain) / 1000
 
-    # Calculate in mm3
-    volume_brain_mm = volume_voxel * voxels_brain
-
-    # Transform to cm3 = ml
-    volume_brain_cm = volume_brain_mm / 1000
-
-    # Save data
     if not os.path.exists(excel_path):
         df = pd.DataFrame(columns=["Name", "Brain Volume (ml)"])
-        logger.info(f"Saving brain volume to {excel_path}")
-        df.to_excel(excel_path, index=False)
+    else:
+        df = pd.read_excel(excel_path)
 
-    df = pd.read_excel(excel_path)
+    df = df[df["Name"] != patient_name]
+
     new_row = {
         "Name": str(patient_name),
         "Brain Volume (ml)": volume_brain_cm,
     }
+
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    logger.info(f"Saving brain volume to {excel_path}")
     df.to_excel(excel_path, index=False)
 
-    logger.info(f"Brain volume: {new_row} cm^3")
+    logger.info(f"Brain volume: {new_row}")
 
 
 def calculate_ventricle_volume(
     image_data, image_nib, excel_path: str, patient_name: str, logger: logging.Logger
 ) -> float:
-    """
-    Calculate the volume of the ventricles in a medical image and save the results to an Excel file.
-    Parameters:
-    image_data (numpy.ndarray): The image data array where different ventricle regions are labeled with integers.
-    image_nib (nibabel.Nifti1Image): The NIfTI image object containing header information.
-    excel_path (str): The file path to the Excel file where the results will be saved.
-    patient_name (str): The name of the patient whose data is being processed.
-    logger (logging.Logger): Logger object for logging information.
-    Returns:
-    float: The total volume of the ventricles in cubic centimeters (cm^3).
-    """
 
     logger.info("Calculating ventricle volume")
 
-    # Calculate the volume
     dimensions_voxel = image_nib.header.get_zooms()
     volume_voxel = dimensions_voxel[0] * dimensions_voxel[1] * dimensions_voxel[2]
     image_data = image_data.astype("i")
 
-    voxels_right = np.sum(np.sum(np.sum(image_data == 1) * 1))
-    voxels_third = np.sum(np.sum(np.sum(image_data == 2) * 1))
-    voxels_fourth = np.sum(np.sum(np.sum(image_data == 3) * 1))
-    voxels_csp = np.sum(np.sum(np.sum(image_data == 4) * 1))
-    voxels_left = np.sum(np.sum(np.sum(image_data == 5) * 1))
+    voxels_right = np.sum(image_data == 1)
+    voxels_third = np.sum(image_data == 2)
+    voxels_fourth = np.sum(image_data == 3)
+    voxels_csp = np.sum(image_data == 4)
+    voxels_left = np.sum(image_data == 5)
 
-    # Calculate in mm3
-    volume_right_mm = volume_voxel * voxels_right
-    volume_third_mm = volume_voxel * voxels_third
-    volume_fourth_mm = volume_voxel * voxels_fourth
-    volume_csp_mm = volume_voxel * voxels_csp
-    volume_left_mm = volume_voxel * voxels_left
+    volume_right_cm = (volume_voxel * voxels_right) / 1000
+    volume_third_cm = (volume_voxel * voxels_third) / 1000
+    volume_fourth_cm = (volume_voxel * voxels_fourth) / 1000
+    volume_csp_cm = (volume_voxel * voxels_csp) / 1000
+    volume_left_cm = (volume_voxel * voxels_left) / 1000
 
-    # Transform to cm3 = ml
-    volume_right_cm = volume_right_mm / 1000
-    volume_third_cm = volume_third_mm / 1000
-    volume_fourth_cm = volume_fourth_mm / 1000
-    volume_csp_cm = volume_csp_mm / 1000
-    volume_left_cm = volume_left_mm / 1000
-
-    # Save data
     if not os.path.exists(excel_path):
         df = pd.DataFrame(
             columns=[
@@ -176,9 +141,11 @@ def calculate_ventricle_volume(
                 "Left Ventricle (ml)",
             ]
         )
-        df.to_excel(excel_path, index=False)
+    else:
+        df = pd.read_excel(excel_path)
 
-    df = pd.read_excel(excel_path)
+    df = df[df["Name"] != patient_name]
+
     new_row = {
         "Name": str(patient_name),
         "Right Ventricle (ml)": volume_right_cm,
@@ -187,25 +154,13 @@ def calculate_ventricle_volume(
         "CSP (ml)": volume_csp_cm,
         "Left Ventricle (ml)": volume_left_cm,
     }
+
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     df.to_excel(excel_path, index=False)
 
-    logger.info(f"Ventricle volume: {new_row} cm^3")
+    logger.info(f"Ventricle volume: {new_row}")
 
 
 def dilate_image(data_array, cube_size=2):
-    """
-    Dilate an image using a custom structuring element.
-
-    This function applies a dilation operation to the input image data using a
-    cubic structuring element of the specified size.
-
-    Parameters:
-    data_array (numpy.ndarray): The image data to be dilated.
-    cube_size (int): The size of the cubic structuring element. Default is 2.
-
-    Returns:
-    numpy.ndarray: The dilated image data.
-    """
     custom_selem = mp.footprint_rectangle((cube_size, cube_size, cube_size))
     return mp.dilation(image=data_array, footprint=custom_selem) * 1

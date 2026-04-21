@@ -1,23 +1,28 @@
 import logging
 import os
 import subprocess
+import socket
 
 import SimpleITK as sitk
 
 
 def run_cranio_preprocessing(
-    t1_path: str, logger: logging.Logger, device: str = "cpu"
+    t2_path: str, logger: logging.Logger, device: str = "cpu"
 ) -> str:
 
     logger.info("Running cranio preprocessing")
 
     # n4 correction
-    image_path_n4 = apply_n4_correction(image_path=t1_path, logger=logger)
+    image_path_n4 = apply_n4_correction(image_path=t2_path, logger=logger)
 
     # skull stripping
     image_path_masked = apply_skull_stripping(
         image_path=image_path_n4, logger=logger, device=device
     )
+
+    #log node 
+    logger.info(f"Node: {socket.gethostname()}")
+    logger.info(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
 
     logger.info("Preprocessing done")
 

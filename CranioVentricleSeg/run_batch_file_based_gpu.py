@@ -7,6 +7,14 @@ def main(args: argparse.Namespace):
     patient_folders = [f.path for f in os.scandir(args.folder_name) if f.is_dir()]
 
     for patient_folder in patient_folders:
+        t2_path = os.path.join(patient_folder, "T2w/T2w_registered.nii.gz")
+
+        #If no T2 available 
+        if not os.path.exists(t2_path):
+            patient_name = os.path.basename(patient_folder)
+            print(f"[SKIPPED] No T2 available for {patient_name}")
+            continue
+
         subprocess.run(
             [
                 "sbatch",
@@ -27,7 +35,7 @@ if __name__ == "__main__":
         "-f",
         "--folder",
         dest="folder_name",
-        help="folder contains all patient folders, which already contain a T1w scan",
+        help="folder contains all patient folders, which already contain a T2w scan",
         required=True,
     )
     parser.add_argument(
