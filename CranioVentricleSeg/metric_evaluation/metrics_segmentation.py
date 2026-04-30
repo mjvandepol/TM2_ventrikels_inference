@@ -1,6 +1,9 @@
 # This file calculates Dice, NSD, volumes (RVE, AVE)
 # Uses TOTAL Dice (volume-weighted) as overall metric + cluster bootstrap CI
 
+## THIS FILE CALCULATES THE 'WRIGHT' DICE SCORE, WEIGHTED TO VOLUME
+
+
 import os
 import numpy as np
 import SimpleITK as sitk
