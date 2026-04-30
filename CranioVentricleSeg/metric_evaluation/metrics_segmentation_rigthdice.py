@@ -11,8 +11,7 @@ from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 
-# ----------- Defining paths 
-
+# ----------- Defining paths
 ground_truth_folder = "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/test_ground_truth"
 
 model_folders = {
@@ -23,7 +22,7 @@ model_folders = {
 output_path = "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/segmentation_metrics_v2_cluster_bootstrap.xlsx"
 
 
-# ----------- Labels 
+# ----------- Labels
 # Label 6 is defined as all pixels with label >= 1 (union of all ventricles)
 
 label_names = {
@@ -36,11 +35,10 @@ label_names = {
 }
 
 ordered_labels = ["RV", "3V", "4V", "CSP", "LV", "TOTAL"]
-nsd_tolerance_mm = 2.0
+nsd_tolerance_MM = 2.0
 
 
-# ----------- Basic functions 
-
+# ----------- Basic functions
 def load_image(path):
     img = sitk.ReadImage(path)
     arr = sitk.GetArrayFromImage(img)
@@ -68,7 +66,7 @@ def nsd_score(pred, gt, spacing):
         spacing_mm=spacing
     )
 
-    return compute_surface_dice_at_tolerance(distances, nsd_tolerance_mm)
+    return compute_surface_dice_at_tolerance(distances, nsd_tolerance_MM)
 
 
 # ----------- Calculate volume
@@ -99,7 +97,7 @@ def compute_ave(pred_vol, gt_vol):
     return abs(pred_vol - gt_vol)
 
 
-# ----------- Bootstrapping 
+# ----------- Bootstrapping
 # Use cluster boostrapping, resampling with replacement, to calculate bias and CI
 
 def bootstrap_ci_cluster(df, value_col, patient_col="patient", n_boot=1000):
@@ -180,6 +178,49 @@ def build_dataframe(model_folder):
 
     return df
 
+# ----------- Write volume sheet  
+
+def write_volume_sheet(ws, df):
+
+    top_headers = [
+        "Case",
+        "Right ventricle","","","",
+        "3th ventricle","","","",
+        "4th ventricle","","","",
+        "CSP","","","",
+        "Left ventricle","","","",
+        "TOTAL",""
+    ]
+
+    sub_headers = [
+        "Case",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred","RVE","AVE",
+        "GT","Pred"
+    ]
+
+    ws.append(top_headers)
+    ws.append(sub_headers)
+
+    merges = [(2,5),(6,9),(10,13),(14,17),(18,21),(22,23)]
+    for start, end in merges:
+        ws.merge_cells(start_row=1, start_column=start, end_row=1, end_column=end)
+
+    ws.merge_cells(start_row=1, start_column=1, end_row=2, end_column=1)
+
+    for _, r in df.iterrows():
+        ws.append([
+            r["case"],
+            r["GT_RV"], r["Pred_RV"], r["rve_RV"], r["ave_RV"],
+            r["GT_3V"], r["Pred_3V"], r["rve_3V"], r["ave_3V"],
+            r["GT_4V"], r["Pred_4V"], r["rve_4V"], r["ave_4V"],
+            r["GT_CSP"], r["Pred_CSP"], r["rve_CSP"], r["ave_CSP"],
+            r["GT_LV"], r["Pred_LV"], r["rve_LV"], r["ave_LV"],
+            r["GT_total"], r["Pred_total"]
+        ])
 
 # ----------- Summary setup
 
@@ -225,7 +266,6 @@ for model_name, model_folder in model_folders.items():
     summary = compute_summary(df)
 
     ws1 = wb.create_sheet(title=f"{model_name}_metrics")
-
     metrics_cols = ["case"]
 
     for label in ordered_labels:
@@ -233,7 +273,6 @@ for model_name, model_folder in model_folders.items():
 
     for label in ordered_labels:
         metrics_cols.append(f"nsd_{label}")
-    
     df_metrics = df[metrics_cols]
 
     for r in dataframe_to_rows(df_metrics, index=False, header=True):
@@ -243,7 +282,7 @@ for model_name, model_folder in model_folders.items():
     ws1.append(["SUMMARY"])
     for k, v in summary.items():
         ws1.append([k, v])
-    
+
     ws2 = wb.create_sheet(title=f"{model_name}_volumes")
     write_volume_sheet(ws2, df)
 
