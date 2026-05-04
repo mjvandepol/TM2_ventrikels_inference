@@ -1,4 +1,4 @@
-# Simple evaluation script model 2 (nnU-Net validation per fold)
+# Fold-based evaluation for model v2.0, T2
 
 import os
 import numpy as np
@@ -7,14 +7,19 @@ import pandas as pd
 
 BASE_DIR = "/data/scratch/r116411/data/nnUNet_results/Dataset002_Brain_T2/nnUNetTrainer__nnUNetPlans__3d_fullres/"
 GT_DIR   = "/data/scratch/r116411/data/nnUNet_raw/Dataset002_Brain_T2/labelsTr/"
+OUTPUT_EXCEL = BASE_DIR + "fold_evaluation_model_v2.0.xlsx"
 
-LABELS = [1,2,3,4,5]
-
+LABELS = {
+    1: "RV",
+    2: "3V",
+    3: "4V",
+    4: "CSP",
+    5: "LV"
+}
 
 def load_nifti(path):
     img = sitk.ReadImage(path)
     return sitk.GetArrayFromImage(img)
-
 
 def dice(gt, pred, label):
     gt_bin = (gt == label)
@@ -26,25 +31,27 @@ def dice(gt, pred, label):
     inter = np.logical_and(gt_bin, pred_bin).sum()
     return 2 * inter / (gt_bin.sum() + pred_bin.sum())
 
-
-def dice_foreground(gt, pred):
+def dice_total(gt, pred):
     gt_bin = (gt > 0)
     pred_bin = (pred > 0)
+
+    if gt_bin.sum() == 0 and pred_bin.sum() == 0:
+        return np.nan
 
     inter = np.logical_and(gt_bin, pred_bin).sum()
     return 2 * inter / (gt_bin.sum() + pred_bin.sum())
 
 
-all_rows = []
+rows = []
 
 for fold in range(5):
 
-    pred_dir = os.path.join(BASE_DIR, f"fold_{fold}", "validation")
+    pred_dir = os.path.join(BASE_DIR, f"fold_{fold}", "validation")  
 
     print(f"\nProcessing fold_{fold}")
-    print("Aantal predictions:", len(os.listdir(pred_dir)))
 
-    rows = []
+    dice_per_label = {l: [] for l in LABELS}
+    dice_total_list = []
 
     for file in sorted(os.listdir(pred_dir)):
         if not file.endswith(".nii.gz"):
@@ -54,28 +61,34 @@ for fold in range(5):
         gt_path   = os.path.join(GT_DIR, file)
 
         if not os.path.exists(gt_path):
-            print("Geen GT voor:", file)
+            print("Geen GT:", file)
             continue
 
         pred = load_nifti(pred_path)
         gt   = load_nifti(gt_path)
 
-        row = {"case": file, "fold": fold}
-
         for l in LABELS:
-            row[f"dice_{l}"] = dice(gt, pred, l)
+            d = dice(gt, pred, l)
+            if not np.isnan(d):
+                dice_per_label[l].append(d)
 
-        fg = dice_foreground(gt, pred)
-        row["foreground_mean"] = fg
+        dt = dice_total(gt, pred)
+        if not np.isnan(dt):
+            dice_total_list.append(dt)
 
-        print(f"{file} | FG: {fg:.4f}")
+    row = {"fold": f"fold_{fold}"}
 
-        rows.append(row)
-        all_rows.append(row)
+    for l, name in LABELS.items():
+        row[f"{name}_dice"] = np.mean(dice_per_label[l]) if dice_per_label[l] else np.nan
 
-    df_fold = pd.DataFrame(rows)
-    print(f"Fold {fold} mean FG:", df_fold["foreground_mean"].mean())
+    row["TOTAL_dice"] = np.mean(dice_total_list) if dice_total_list else np.nan
 
+    print(row)
 
-df_all = pd.DataFrame(all_rows)
-print("\nOverall mean FG:", df_all["foreground_mean"].mean())
+    rows.append(row)
+
+df = pd.DataFrame(rows)
+
+df.to_excel(OUTPUT_EXCEL, index=False)
+
+print(f"\nopgeslagen naar: {OUTPUT_EXCEL}")

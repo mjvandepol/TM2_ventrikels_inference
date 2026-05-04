@@ -1,7 +1,5 @@
-# This file calculates Dice, NSD, volumes (RVE, AVE)
-# Uses TOTAL Dice (volume-weighted) as overall metric + cluster bootstrap CI
-
-## THIS FILE CALCULATES THE 'WRIGHT' DICE SCORE, WEIGHTED TO VOLUME
+# This file calculates the Dice, NSD, volumes (RVE, AVE) with Q1-Q3 and CI with cluster bootstrap
+# The total dice is volume weighted. Median values are used. 
 
 
 import os
@@ -89,11 +87,10 @@ def compute_volumes(arr, spacing):
 
     return volumes
 
-
 def compute_rve(pred_vol, gt_vol):
     if gt_vol == 0:
         return np.nan
-    return (pred_vol - gt_vol) / gt_vol
+    return abs(pred_vol - gt_vol) / gt_vol
 
 
 def compute_ave(pred_vol, gt_vol):
@@ -159,8 +156,15 @@ def build_dataframe(model_folder):
                 gt_bin = (gt == label).astype(np.uint8)
                 pred_bin = (pred == label).astype(np.uint8)
 
-            d = dice_score(pred_bin, gt_bin)
-            n = nsd_score(pred_bin, gt_bin, spacing)
+            
+            # skip CSP if both are empty, set to NaN
+            if label == 4 and gt_bin.sum() == 0 and pred_bin.sum() == 0:
+                d = np.nan
+                n = np.nan
+            else:
+                d = dice_score(pred_bin, gt_bin)
+                n = nsd_score(pred_bin, gt_bin, spacing)
+
 
             row[f"dice_{name}"] = d
             row[f"nsd_{name}"] = n
@@ -225,6 +229,7 @@ def write_volume_sheet(ws, df):
             r["GT_LV"], r["Pred_LV"], r["rve_LV"], r["ave_LV"],
             r["GT_TOTAL"], r["Pred_TOTAL"], r["rve_TOTAL"], r["ave_TOTAL"]
         ])
+    
 
 
 # ----------- Summary setup
