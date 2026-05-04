@@ -4,7 +4,6 @@ import os
 
 BASE_DIR = "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/test_data"
 
-# bestanden die je wil checken
 required_files = [
     "ventricle_volume_v2.0_nomirror.xlsx",
     "ventricle_volume_v1.0_nomirror.xlsx",

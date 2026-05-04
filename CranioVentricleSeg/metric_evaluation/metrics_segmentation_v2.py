@@ -1,7 +1,7 @@
 # This file calculates Dice, NSD, volumes (RVE, AVE)
 # Uses TOTAL Dice (volume-weighted) as overall metric + cluster bootstrap CI
 
-## THIS FILE CALCULATES THE 'RIGHT' DICE SCORE, WEIGHTED TO VOLUME
+## THIS FILE CALCULATES THE 'WRIGHT' DICE SCORE, WEIGHTED TO VOLUME
 
 
 import os
@@ -22,7 +22,7 @@ model_folders = {
     "v2.0": "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/test_inference_v2.0",
 }
 
-output_path = "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/segmentation_metrics_v2_cluster_bootstrap.xlsx"
+output_path = "/data/scratch/r116411/ventricle_segmentation_train_test_t2/test/segmentation_metrics_cluster_bootstrap.xlsx"
 
 
 # ----------- Labels
@@ -181,6 +181,7 @@ def build_dataframe(model_folder):
 
     return df
 
+
 # ----------- Write volume sheet  
 
 def write_volume_sheet(ws, df):
@@ -192,7 +193,7 @@ def write_volume_sheet(ws, df):
         "4th ventricle","","","",
         "CSP","","","",
         "Left ventricle","","","",
-        "TOTAL",""
+        "TOTAL","","",""
     ]
 
     sub_headers = [
@@ -208,7 +209,7 @@ def write_volume_sheet(ws, df):
     ws.append(top_headers)
     ws.append(sub_headers)
 
-    merges = [(2,5),(6,9),(10,13),(14,17),(18,21),(22,23)]
+    merges = [(2,5),(6,9),(10,13),(14,17),(18,21),(22,25)]
     for start, end in merges:
         ws.merge_cells(start_row=1, start_column=start, end_row=1, end_column=end)
 
@@ -222,38 +223,39 @@ def write_volume_sheet(ws, df):
             r["GT_4V"], r["Pred_4V"], r["rve_4V"], r["ave_4V"],
             r["GT_CSP"], r["Pred_CSP"], r["rve_CSP"], r["ave_CSP"],
             r["GT_LV"], r["Pred_LV"], r["rve_LV"], r["ave_LV"],
-            r["GT_TOTAL"], r["Pred_TOTAL"], r["rve_LV"], r["ave_LV"]
+            r["GT_TOTAL"], r["Pred_TOTAL"], r["rve_TOTAL"], r["ave_TOTAL"]
         ])
+
 
 # ----------- Summary setup
 
-def compute_summary(df):
+def compute_summary_metric(df, metric_prefix):
 
     summary = {}
 
-    for name in ["RV", "3V", "4V", "CSP", "LV", "TOTAL"]:      #exclude CSP in summary
+    for name in ["RV", "3V", "4V", "CSP", "LV", "TOTAL"]:
 
-        vals = df[f"dice_{name}"].dropna()
+        col = f"{metric_prefix}_{name}"
+        vals = df[col].dropna()
 
         summary[f"{name}_median"] = vals.median()
         summary[f"{name}_q1"] = vals.quantile(0.25)
         summary[f"{name}_q3"] = vals.quantile(0.75)
 
-        ci_low, ci_high = bootstrap_ci_cluster(df, f"dice_{name}")
+        ci_low, ci_high = bootstrap_ci_cluster(df, col)
         summary[f"{name}_ci_low"] = ci_low
         summary[f"{name}_ci_high"] = ci_high
 
-    vals = df["dice_TOTAL"].dropna()
-
-    summary["overall_median"] = vals.median()
-    summary["overall_q1"] = vals.quantile(0.25)
-    summary["overall_q3"] = vals.quantile(0.75)
-
-    ci_low, ci_high = bootstrap_ci_cluster(df, "dice_TOTAL")
-    summary["overall_ci_low"] = ci_low
-    summary["overall_ci_high"] = ci_high
-
     return summary
+
+
+def write_summary_block(ws, title, summary):
+
+    ws.append([])
+    ws.append([title])
+
+    for k, v in summary.items():
+        ws.append([k, v])
 
 
 # ----------- Write excel
@@ -266,7 +268,11 @@ for model_name, model_folder in model_folders.items():
     print(f"\n=== Processing {model_name} ===")
 
     df = build_dataframe(model_folder)
-    summary = compute_summary(df)
+
+    dice_summary = compute_summary_metric(df, "dice")
+    nsd_summary  = compute_summary_metric(df, "nsd")
+    rve_summary  = compute_summary_metric(df, "rve")
+    ave_summary  = compute_summary_metric(df, "ave")
 
     ws1 = wb.create_sheet(title=f"{model_name}_metrics")
     metrics_cols = ["case"]
@@ -276,15 +282,16 @@ for model_name, model_folder in model_folders.items():
 
     for label in ordered_labels:
         metrics_cols.append(f"nsd_{label}")
+
     df_metrics = df[metrics_cols]
 
     for r in dataframe_to_rows(df_metrics, index=False, header=True):
         ws1.append(r)
 
-    ws1.append([])
-    ws1.append(["SUMMARY"])
-    for k, v in summary.items():
-        ws1.append([k, v])
+    write_summary_block(ws1, "DICE SUMMARY", dice_summary)
+    write_summary_block(ws1, "NSD SUMMARY", nsd_summary)
+    write_summary_block(ws1, "RVE SUMMARY", rve_summary)
+    write_summary_block(ws1, "AVE SUMMARY", ave_summary)
 
     ws2 = wb.create_sheet(title=f"{model_name}_volumes")
     write_volume_sheet(ws2, df)
