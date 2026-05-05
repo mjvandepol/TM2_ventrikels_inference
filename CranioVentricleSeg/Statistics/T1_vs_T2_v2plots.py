@@ -9,7 +9,7 @@ from scipy.stats import wilcoxon
 
 
 # Load data
-file_path = "statistics/final_segmentation_metrics_cluster_bootstrap.xlsx"
+file_path = "final_segmentation_metrics_cluster_bootstrap.xlsx"
 
 t1 = pd.read_excel(file_path, sheet_name="T1_v2.0_metrics")
 t2 = pd.read_excel(file_path, sheet_name="v2.0_metrics")
@@ -44,12 +44,8 @@ t2 = t2[cols]
 
 
 # Create patient ID
-def extract_patient(case_name):
-    return case_name.split("_")[0]
-
-t1["patient"] = t1["case"].apply(extract_patient)
-t2["patient"] = t2["case"].apply(extract_patient)
-
+t1["patient"] = t1["case"].str.extract(r"(C_\d+|M_\d+)")
+t2["patient"] = t2["case"].str.extract(r"(C_\d+|M_\d+)")
 
 # Debug: number of scans and patients before aggregation
 print("\nBefore aggregation:")
@@ -79,7 +75,7 @@ print("Number of patients used in analysis:", len(merged))
 structures = ["RV", "LV", "3V", "4V", "CSP", "TOTAL"]
 
 results = []
-p_values = []
+p_values = {}
 
 for s in structures:
 
@@ -144,7 +140,7 @@ name_map = {
     "TOTAL": "Total"
 }
 
-order = ["RV", "LV", "3V", "4V", "CSP"]
+order = ["RV", "LV", "3V", "4V", "CSP", "TOTAL"]
 
 for s in order:
     for i in range(len(merged)):
@@ -165,6 +161,8 @@ df_plot = df_plot.dropna()
 
 # Boxplot
 plt.figure(figsize=(10,6))
+sns.set(style="whitegrid")
+
 
 sns.boxplot(
     data=df_plot,
@@ -210,6 +208,7 @@ handles, labels = plt.gca().get_legend_handles_labels()
 plt.legend(handles[:2], labels[:2], title="Model")
 
 plt.ylabel("Dice coefficient")
+plt.ylim(0,1.05)
 plt.title("Segmentation performance per ventricle (patient-level)")
 
 plt.tight_layout()
