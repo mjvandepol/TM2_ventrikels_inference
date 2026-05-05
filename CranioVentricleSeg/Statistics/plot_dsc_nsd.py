@@ -3,7 +3,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-# labels
 structures = [
     "Right ventricle",
     "Left ventricle",
@@ -13,37 +12,37 @@ structures = [
     "Total"
 ]
 
+# DSC
+dsc_med = [0.94, 0.94, 0.84, 0.82, 0.00, 0.93]
+dsc_q1  = [0.89, 0.89, 0.71, 0.74, 0.00, 0.89]
+dsc_q3  = [0.97, 0.97, 0.86, 0.86, 0.47, 0.96]
+
+# NSD
+nsd_med = [0.99, 0.99, 0.97, 0.96, 0.00, 0.99]
+nsd_q1  = [0.97, 0.96, 0.90, 0.94, 0.00, 0.97]
+nsd_q3  = [1.00, 1.00, 0.99, 0.99, 0.72, 0.99]
+
 x = np.arange(len(structures))
 
-# median values
-dsc = np.array([0.94, 0.94, 0.84, 0.82, 0.00, 0.93])
-nsd = np.array([0.99, 0.99, 0.97, 0.96, 0.00, 0.99])
-
-# IQR bounds
-dsc_lower = np.array([0.89, 0.89, 0.71, 0.74, 0.00, 0.89])
-dsc_upper = np.array([0.97, 0.97, 0.86, 0.86, 0.47, 0.96])
-
-nsd_lower = np.array([0.97, 0.96, 0.90, 0.94, 0.00, 0.97])
-nsd_upper = np.array([1.00, 1.00, 0.99, 0.99, 0.72, 0.99])
-
-# kleuren (CSP grijs)
-colors = ['black'] * len(structures)
-colors[4] = 'lightgray'
-
-# plot
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
-for i in range(len(structures)):
-    # DSC
-    axes[0].plot([i, i], [dsc_lower[i], dsc_upper[i]], color=colors[i], linewidth=2)
-    axes[0].plot(i, dsc[i], marker='_', color=colors[i], markersize=12)
+def draw_box(ax, med, q1, q3, title):
+    for i in range(len(structures)):
+        color = 'lightgray' if i == 4 else 'black'  # CSP grijs
+        
+        # box (IQR)
+        ax.add_patch(plt.Rectangle(
+            (i - 0.2, q1[i]),
+            0.4,
+            q3[i] - q1[i],
+            edgecolor=color,
+            facecolor='none',
+            linewidth=1.5
+        ))
+        
+        # median lijn
+        ax.plot([i - 0.2, i + 0.2], [med[i], med[i]], color=color, linewidth=2)
 
-    # NSD
-    axes[1].plot([i, i], [nsd_lower[i], nsd_upper[i]], color=colors[i], linewidth=2)
-    axes[1].plot(i, nsd[i], marker='_', color=colors[i], markersize=12)
-
-# styling
-for ax, title in zip(axes, ["DSC (T2, v2.0)", "NSD (T2, v2.0)"]):
     ax.set_xticks(x)
     ax.set_xticklabels(structures, rotation=45, ha='right')
     ax.set_ylim(0, 1.05)
@@ -52,9 +51,11 @@ for ax, title in zip(axes, ["DSC (T2, v2.0)", "NSD (T2, v2.0)"]):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
+draw_box(axes[0], dsc_med, dsc_q1, dsc_q3, "DSC (T2, v2.0)")
+draw_box(axes[1], nsd_med, nsd_q1, nsd_q3, "NSD (T2, v2.0)")
+
 plt.tight_layout()
 
-# save 
-plt.savefig("T2_v2_dsc_nsd_clean.png", dpi=300, bbox_inches='tight')
+plt.savefig("T2_dsc_nsd.png", dpi=300, bbox_inches='tight')
 
 plt.close()
