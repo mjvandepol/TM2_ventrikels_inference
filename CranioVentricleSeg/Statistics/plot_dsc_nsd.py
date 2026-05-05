@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-# labels 
+# labels
 structures = [
     "Right ventricle",
     "Left ventricle",
@@ -13,40 +13,48 @@ structures = [
     "Total"
 ]
 
+x = np.arange(len(structures))
+
 # median values
 dsc = np.array([0.94, 0.94, 0.84, 0.82, 0.00, 0.93])
 nsd = np.array([0.99, 0.99, 0.97, 0.96, 0.00, 0.99])
 
-# IQR (lower, upper → omzetten naar error bars)
+# IQR bounds
 dsc_lower = np.array([0.89, 0.89, 0.71, 0.74, 0.00, 0.89])
 dsc_upper = np.array([0.97, 0.97, 0.86, 0.86, 0.47, 0.96])
 
 nsd_lower = np.array([0.97, 0.96, 0.90, 0.94, 0.00, 0.97])
 nsd_upper = np.array([1.00, 1.00, 0.99, 0.99, 0.72, 0.99])
 
-# error bars 
-dsc_err = [dsc - dsc_lower, dsc_upper - dsc]
-nsd_err = [nsd - nsd_lower, nsd_upper - nsd]
-
-x = np.arange(len(structures))
+# kleuren (CSP grijs)
+colors = ['black'] * len(structures)
+colors[4] = 'lightgray'
 
 # plot
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=False)
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 
-# DSC
-axes[0].bar(x, dsc, yerr=dsc_err, capsize=4)
-axes[0].set_title("DSC (T2, v2.0)")
-axes[0].set_xticks(x)
-axes[0].set_xticklabels(structures, rotation=45, ha='right')
-axes[0].set_ylabel("Score")
-axes[0].set_ylim(0, 1.05)
+for i in range(len(structures)):
+    # DSC
+    axes[0].plot([i, i], [dsc_lower[i], dsc_upper[i]], color=colors[i], linewidth=2)
+    axes[0].plot(i, dsc[i], marker='_', color=colors[i], markersize=12)
 
-# NSD
-axes[1].bar(x, nsd, yerr=nsd_err, capsize=4)
-axes[1].set_title("NSD (T2, v2.0)")
-axes[1].set_xticks(x)
-axes[1].set_xticklabels(structures, rotation=45, ha='right')
-axes[1].set_ylim(0, 1.05)
+    # NSD
+    axes[1].plot([i, i], [nsd_lower[i], nsd_upper[i]], color=colors[i], linewidth=2)
+    axes[1].plot(i, nsd[i], marker='_', color=colors[i], markersize=12)
+
+# styling
+for ax, title in zip(axes, ["DSC (T2, v2.0)", "NSD (T2, v2.0)"]):
+    ax.set_xticks(x)
+    ax.set_xticklabels(structures, rotation=45, ha='right')
+    ax.set_ylim(0, 1.05)
+    ax.set_title(title)
+    ax.set_ylabel("Score")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
 plt.tight_layout()
-plt.savefig("dsc_nsd_plot.png", dpi=300, bbox_inches='tight')
+
+# save 
+plt.savefig("T2_v2_dsc_nsd_clean.png", dpi=300, bbox_inches='tight')
+
+plt.close()
