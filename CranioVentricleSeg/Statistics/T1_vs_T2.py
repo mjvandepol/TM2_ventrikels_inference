@@ -1,6 +1,9 @@
 # Statistical comparison T1 vs T2
 # Patient-level aggregation using median
 
+
+# right version 
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
