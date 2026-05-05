@@ -1,284 +1,216 @@
+# Statistical comparison T1 vs T2
+# Patient-level aggregation using median
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import wilcoxon
 
-# load data
-file_path = "/data/scratch/r116411/data/final_segmentation_metrics_cluster_bootstrap.xlsx"
-output_path = "/trinity/home/r116411/repositories/TM2_ventrikels_inference/CranioVentricleSeg/metric_evaluation/paired_statistics_T1vsT2.xlsx"
+
+# Load data
+file_path = "final_segmentation_metrics_cluster_bootstrap.xlsx"
 
 t1 = pd.read_excel(file_path, sheet_name="T1_v2.0_metrics")
 t2 = pd.read_excel(file_path, sheet_name="v2.0_metrics")
 
-# rename columns 
+
+# Standardize column names
 t2 = t2.rename(columns={
     "case": "case",
-    "dice_RV": "RV_dice",
-    "dice_3V": "3V_dice",
-    "dice_4V": "4V_dice",
-    "dice_CSP": "CSP_dice",
-    "dice_LV": "LV_dice",
-    "dice_TOTAL": "TOTAL_dice"
+    "dice_RV": "RV",
+    "dice_3V": "3V",
+    "dice_4V": "4V",
+    "dice_CSP": "CSP",
+    "dice_LV": "LV",
+    "dice_TOTAL": "TOTAL"
 })
 
 t1 = t1.rename(columns={
     "Name": "case",
-    "Right ventricle": "RV_dice",
-    "Third ventricle": "3V_dice",
-    "Fourth ventricle": "4V_dice",
-    "CSP": "CSP_dice",
-    "Left ventricle": "LV_dice",
-    "Total ventricles": "TOTAL_dice"
+    "Right ventricle": "RV",
+    "Third ventricle": "3V",
+    "Fourth ventricle": "4V",
+    "CSP": "CSP",
+    "Left ventricle": "LV",
+    "Total ventricles": "TOTAL"
 })
 
-cols = ["case", "RV_dice", "3V_dice", "4V_dice", "CSP_dice", "LV_dice", "TOTAL_dice"]
+
+cols = ["case", "RV", "LV", "3V", "4V", "CSP", "TOTAL"]
 
 t1 = t1[cols]
 t2 = t2[cols]
 
-# fix duplicaten (folds)
-t1 = t1.groupby("case").mean().reset_index()
-t2 = t2.groupby("case").mean().reset_index()
 
-# merge overlap
-merged = pd.merge(t1, t2, on="case", suffixes=("_T1", "_T2"))
+# Create patient ID
+t1["patient"] = t1["case"].str.extract(r"(C_\d+|M_\d+)")
+t2["patient"] = t2["case"].str.extract(r"(C_\d+|M_\d+)")
 
-print("aantal unieke cases:", len(merged))
+# Debug: number of scans and patients before aggregation
+print("\nBefore aggregation:")
+print("T1 scans:", len(t1), "| unique patients:", t1["patient"].nunique())
+print("T2 scans:", len(t2), "| unique patients:", t2["patient"].nunique())
 
-metrics = ["RV_dice", "3V_dice", "4V_dice", "CSP_dice", "LV_dice", "TOTAL_dice"]
+
+# Aggregate per patient using median
+t1_patient = t1.groupby("patient").median(numeric_only=True).reset_index()
+t2_patient = t2.groupby("patient").median(numeric_only=True).reset_index()
+
+
+# Debug: after aggregation
+print("\nAfter aggregation (patient-level):")
+print("T1 patients:", len(t1_patient))
+print("T2 patients:", len(t2_patient))
+
+
+# Keep only overlapping patients
+merged = pd.merge(t1_patient, t2_patient, on="patient", suffixes=("_T1", "_T2"))
+
+print("\nAfter merge (overlapping patients):")
+print("Number of patients used in analysis:", len(merged))
+
+
+# Statistical comparison
+structures = ["RV", "LV", "3V", "4V", "CSP", "TOTAL"]
 
 results = []
+p_values = {}
 
-for m in metrics:
+for s in structures:
 
-    x = merged[f"{m}_T1"]
-    y = merged[f"{m}_T2"]
+    # Analyse per label
+    x = merged[f"{s}_T1"]
+    y = merged[f"{s}_T2"]
 
-    # drop NaNs
+    # Use only paired data
     mask = ~(x.isna() | y.isna())
+
+    n_before = len(x)
+    n_after = mask.sum()
+
+    print(f"\n{s}:")
+    print(f"  Patients before filtering: {n_before}")
+    print(f"  Patients after filtering (paired, non-NaN): {n_after}")
+    print(f"  Dropped: {n_before - n_after}")
+
+
     x = x[mask]
     y = y[mask]
 
-    if len(x) == 0:
-        p = np.nan
-        ci_low = np.nan
-        ci_high = np.nan
-        diff_mean = np.nan
-        mean_t1 = np.nan
-        mean_t2 = np.nan
+    if len(x) > 0:
+        stat, p = wilcoxon(x, y, zero_method="wilcox")
     else:
-        # wilcoxon
-        if np.all(x == y):
-            p = 1.0
-        else:
-            stat, p = wilcoxon(x, y, zero_method="wilcox")
-
-        # verschil
-        diff = y - x
-        diff_mean = diff.mean()
-
-        # ci
-        ci_low = np.percentile(diff, 2.5)
-        ci_high = np.percentile(diff, 97.5)
-
-        # median
-        import pandas as pd
-import numpy as np
-from scipy.stats import wilcoxon
-
-# load data
-file_path = "/data/scratch/r116411/data/final_segmentation_metrics_cluster_bootstrap.xlsx"
-output_path = "/trinity/home/r116411/repositories/TM2_ventrikels_inference/CranioVentricleSeg/metric_evaluation/paired_statistics_T1vsT2.xlsx"
-
-t1 = pd.read_excel(file_path, sheet_name="T1_v2.0_metrics")
-t2 = pd.read_excel(file_path, sheet_name="v2.0_metrics")
-
-# rename columns 
-t2 = t2.rename(columns={
-    "case": "case",
-    "dice_RV": "RV_dice",
-    "dice_3V": "3V_dice",
-    "dice_4V": "4V_dice",
-    "dice_CSP": "CSP_dice",
-    "dice_LV": "LV_dice",
-    "dice_TOTAL": "TOTAL_dice"
-})
-
-t1 = t1.rename(columns={
-    "Name": "case",
-    "Right ventricle": "RV_dice",
-    "Third ventricle": "3V_dice",
-    "Fourth ventricle": "4V_dice",
-    "CSP": "CSP_dice",
-    "Left ventricle": "LV_dice",
-    "Total ventricles": "TOTAL_dice"
-})
-
-cols = ["case", "RV_dice", "3V_dice", "4V_dice", "CSP_dice", "LV_dice", "TOTAL_dice"]
-
-t1 = t1[cols]
-t2 = t2[cols]
-
-# fix duplicaten (folds)
-median_t1 = np.median(x)
-median_t2 = np.median(y)
-
-ci1_low = np.percentile(x, 2.5)
-ci1_high = np.percentile(x, 97.5)
-
-ci2_low = np.percentile(y, 2.5)
-ci2_high = np.percentile(y, 97.5)
-
-# merge overlap
-merged = pd.merge(t1, t2, on="case", suffixes=("_T1", "_T2"))
-
-print("aantal unieke cases:", len(merged))
-
-metrics = ["RV_dice", "3V_dice", "4V_dice", "CSP_dice", "LV_dice", "TOTAL_dice"]
-
-results = []
-
-for m in metrics:
-
-    x = merged[f"{m}_T1"]
-    y = merged[f"{m}_T2"]
-
-    # drop NaNs
-    mask = ~(x.isna() | y.isna())
-    x = x[mask]
-    y = y[mask]
-
-    if len(x) == 0:
         p = np.nan
-        ci_low = np.nan
-        ci_high = np.nan
-        diff_mean = np.nan
-        median_t1 = np.nan
-        median_t2 = np.nan
-    else:
-        # wilcoxon
-        if np.all(x == y):
-            p = 1.0
-        else:
-            stat, p = wilcoxon(x, y, zero_method="wilcox")
 
-        # difference
-        diff = y - x
-        diff_mean = diff.mean()
-
-        # median + CI per model
-        median_t1 = np.median(x)
-        ci1_low = np.percentile(x, 2.5)
-        ci1_high = np.percentile(x, 97.5)
-
-        median_t2 = np.median(y)
-        ci2_low = np.percentile(y, 2.5)
-        ci2_high = np.percentile(y, 97.5)
-
+    
     results.append({
-        "metric": m,
-        "T1": f"{median_t1:.2f} ({ci1_low:.2f}-{ci1_high:.2f})",
-        "T2": f"{median_t2:.2f} ({ci2_low:.2f}-{ci2_high:.2f})",
-        "p_value": p
+        "Ventricle": s,
+        "Median T1": np.median(x),
+        "Median T2": np.median(y),
+        "p-value": p
     })
+    p_values[s] = p
 
-# output
+
 df_results = pd.DataFrame(results)
 
-print("\nresultaten:")
+print("\nStatistical results:")
 print(df_results)
 
-df_results.to_excel(output_path, index=False)
+# Format p-values
+def format_p(p):
+    if np.isnan(p):
+        return "n/a"
+    elif p < 0.001:
+        return "p < 0.001"
+    else:
+        return f"p = {p:.3f}"
+    
 
-print("\nopgeslagen naar:", output_path)
-
-
-
-
-## PLOTS
-# ---------- paired plot (TOTAL Dice)
-
-x = merged["TOTAL_dice_T1"]
-y = merged["TOTAL_dice_T2"]
-
-plt.figure(figsize=(5,6))
-
-# lijnen (patients)
-for i in range(len(x)):
-    plt.plot([1,2], [x.iloc[i], y.iloc[i]],
-             color="gray", alpha=0.5)
-
-# punten
-plt.scatter([1]*len(x), x, color="blue", label="T1", s=20)
-plt.scatter([2]*len(y), y, color="orange", label="T2", s=20)
-
-# median
-plt.scatter(1, x.median(), color="blue", s=100, edgecolor="black")
-plt.scatter(2, y.median(), color="orange", s=100, edgecolor="black")
-
-plt.xticks([1,2], ["T1", "T2"])
-plt.ylabel("Dice coefficient")
-plt.title("Paired comparison of the total dice")
-
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-
-# ---------- Box  plot (all labels)
-
-
-metrics = ["RV_dice", "3V_dice", "4V_dice", "CSP_dice", "LV_dice", "TOTAL_dice"]
-
+# Prepare data for plotting
 plot_data = []
 
-for m in metrics:
-    for i in range(len(merged)):
-        plot_data.append({
-            "Dice": merged[f"{m}_T1"].iloc[i],
-            "Model": "T1",
-            "Structure": m.replace("_dice", "")
-        })
-        plot_data.append({
-            "Dice": merged[f"{m}_T2"].iloc[i],
-            "Model": "T2",
-            "Structure": m.replace("_dice", "")
-        })
-
-df_plot = pd.DataFrame(plot_data)
+name_map = {
+    "RV": "Right ventricle",
+    "LV": "Left ventricle",
+    "3V": "3rd ventricle",
+    "4V": "4th ventricle",
+    "CSP": "CSP",
+    "TOTAL": "Total"
+}
 
 order = ["RV", "LV", "3V", "4V", "CSP", "TOTAL"]
 
-plt.figure(figsize=(11,6))
+for s in order:
+    for i in range(len(merged)):
+        plot_data.append({
+            "Dice": merged[f"{s}_T1"].iloc[i],
+            "Model": "T1",
+            "Ventricle": name_map[s]
+        })
+        plot_data.append({
+            "Dice": merged[f"{s}_T2"].iloc[i],
+            "Model": "T2",
+            "Ventricle": name_map[s]
+        })
+
+df_plot = pd.DataFrame(plot_data)
+df_plot = df_plot.dropna()
+
+
+# Boxplot
+plt.figure(figsize=(10,6))
+sns.set(style="whitegrid")
+
 
 sns.boxplot(
     data=df_plot,
     x="Ventricle",
     y="Dice",
     hue="Model",
-    order=order
+    order=[name_map[s] for s in order]
 )
 
-# datapoints 
 sns.stripplot(
     data=df_plot,
     x="Ventricle",
     y="Dice",
     hue="Model",
-    order=order,
     dodge=True,
     alpha=0.35,
     color="black"
 )
 
-plt.title("Segmentation performance per ventricle, T1 vs T2")
-plt.ylabel("Dice coefficient")
+# Add p-values above plots
+ax = plt.gca()
 
-# Legend
+for i, s in enumerate(order):
+
+    p = p_values.get(s, np.nan)
+
+    subset = df_plot[df_plot["Ventricle"] == name_map[s]]
+    y_max = subset["Dice"].max()
+
+    y_pos = min(1.02, y_max + 0.05)
+
+    ax.text(
+        i,
+        y_pos,
+        format_p(p),
+        ha='center',
+        va='bottom',
+        fontsize=10
+    )
+
+    
 handles, labels = plt.gca().get_legend_handles_labels()
 plt.legend(handles[:2], labels[:2], title="Model")
 
+plt.ylabel("Dice coefficient")
+plt.ylim(0,1.05)
+plt.title("Segmentation performance per ventricle (patient-level)")
+
 plt.tight_layout()
-plt.savefig("boxplot.png", dpi=300)
+plt.savefig("boxplot_patient_level.png", dpi=300)
 plt.show()
