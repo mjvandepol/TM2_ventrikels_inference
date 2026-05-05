@@ -2,6 +2,8 @@
 # The total dice is volume weighted. Median values are used. 
 
 
+## HIERIN WORDT NIET PER PT GEKEKEN MAAR OP SCAN NIVEAU, PER PT WEL IN STATISTICS FILE
+
 import os
 import numpy as np
 import SimpleITK as sitk

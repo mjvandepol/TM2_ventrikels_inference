@@ -1,0 +1,217 @@
+# Statistical comparison T1 vs T2
+# Patient-level aggregation using median
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import wilcoxon
+
+
+# Load data
+file_path = "statistics/final_segmentation_metrics_cluster_bootstrap.xlsx"
+
+t1 = pd.read_excel(file_path, sheet_name="T1_v2.0_metrics")
+t2 = pd.read_excel(file_path, sheet_name="v2.0_metrics")
+
+
+# Standardize column names
+t2 = t2.rename(columns={
+    "case": "case",
+    "dice_RV": "RV",
+    "dice_3V": "3V",
+    "dice_4V": "4V",
+    "dice_CSP": "CSP",
+    "dice_LV": "LV",
+    "dice_TOTAL": "TOTAL"
+})
+
+t1 = t1.rename(columns={
+    "Name": "case",
+    "Right ventricle": "RV",
+    "Third ventricle": "3V",
+    "Fourth ventricle": "4V",
+    "CSP": "CSP",
+    "Left ventricle": "LV",
+    "Total ventricles": "TOTAL"
+})
+
+
+cols = ["case", "RV", "LV", "3V", "4V", "CSP", "TOTAL"]
+
+t1 = t1[cols]
+t2 = t2[cols]
+
+
+# Create patient ID
+def extract_patient(case_name):
+    return case_name.split("_")[0]
+
+t1["patient"] = t1["case"].apply(extract_patient)
+t2["patient"] = t2["case"].apply(extract_patient)
+
+
+# Debug: number of scans and patients before aggregation
+print("\nBefore aggregation:")
+print("T1 scans:", len(t1), "| unique patients:", t1["patient"].nunique())
+print("T2 scans:", len(t2), "| unique patients:", t2["patient"].nunique())
+
+
+# Aggregate per patient using median
+t1_patient = t1.groupby("patient").median(numeric_only=True).reset_index()
+t2_patient = t2.groupby("patient").median(numeric_only=True).reset_index()
+
+
+# Debug: after aggregation
+print("\nAfter aggregation (patient-level):")
+print("T1 patients:", len(t1_patient))
+print("T2 patients:", len(t2_patient))
+
+
+# Keep only overlapping patients
+merged = pd.merge(t1_patient, t2_patient, on="patient", suffixes=("_T1", "_T2"))
+
+print("\nAfter merge (overlapping patients):")
+print("Number of patients used in analysis:", len(merged))
+
+
+# Statistical comparison
+structures = ["RV", "LV", "3V", "4V", "CSP", "TOTAL"]
+
+results = []
+p_values = []
+
+for s in structures:
+
+    # Analyse per label
+    x = merged[f"{s}_T1"]
+    y = merged[f"{s}_T2"]
+
+    # Use only paired data
+    mask = ~(x.isna() | y.isna())
+
+    n_before = len(x)
+    n_after = mask.sum()
+
+    print(f"\n{s}:")
+    print(f"  Patients before filtering: {n_before}")
+    print(f"  Patients after filtering (paired, non-NaN): {n_after}")
+    print(f"  Dropped: {n_before - n_after}")
+
+
+    x = x[mask]
+    y = y[mask]
+
+    if len(x) > 0:
+        stat, p = wilcoxon(x, y, zero_method="wilcox")
+    else:
+        p = np.nan
+
+    
+    results.append({
+        "Ventricle": s,
+        "Median T1": np.median(x),
+        "Median T2": np.median(y),
+        "p-value": p
+    })
+    p_values[s] = p
+
+
+df_results = pd.DataFrame(results)
+
+print("\nStatistical results:")
+print(df_results)
+
+# Format p-values
+def format_p(p):
+    if np.isnan(p):
+        return "n/a"
+    elif p < 0.001:
+        return "p < 0.001"
+    else:
+        return f"p = {p:.3f}"
+    
+
+# Prepare data for plotting
+plot_data = []
+
+name_map = {
+    "RV": "Right ventricle",
+    "LV": "Left ventricle",
+    "3V": "3rd ventricle",
+    "4V": "4th ventricle",
+    "CSP": "CSP",
+    "TOTAL": "Total"
+}
+
+order = ["RV", "LV", "3V", "4V", "CSP"]
+
+for s in order:
+    for i in range(len(merged)):
+        plot_data.append({
+            "Dice": merged[f"{s}_T1"].iloc[i],
+            "Model": "T1",
+            "Ventricle": name_map[s]
+        })
+        plot_data.append({
+            "Dice": merged[f"{s}_T2"].iloc[i],
+            "Model": "T2",
+            "Ventricle": name_map[s]
+        })
+
+df_plot = pd.DataFrame(plot_data)
+df_plot = df_plot.dropna()
+
+
+# Boxplot
+plt.figure(figsize=(10,6))
+
+sns.boxplot(
+    data=df_plot,
+    x="Ventricle",
+    y="Dice",
+    hue="Model",
+    order=[name_map[s] for s in order]
+)
+
+sns.stripplot(
+    data=df_plot,
+    x="Ventricle",
+    y="Dice",
+    hue="Model",
+    dodge=True,
+    alpha=0.35,
+    color="black"
+)
+
+# Add p-values above plots
+ax = plt.gca()
+
+for i, s in enumerate(order):
+
+    p = p_values.get(s, np.nan)
+
+    subset = df_plot[df_plot["Ventricle"] == name_map[s]]
+    y_max = subset["Dice"].max()
+
+    y_pos = min(1.02, y_max + 0.05)
+
+    ax.text(
+        i,
+        y_pos,
+        format_p(p),
+        ha='center',
+        va='bottom',
+        fontsize=10
+    )
+
+    
+handles, labels = plt.gca().get_legend_handles_labels()
+plt.legend(handles[:2], labels[:2], title="Model")
+
+plt.ylabel("Dice coefficient")
+plt.title("Segmentation performance per ventricle (patient-level)")
+
+plt.tight_layout()
+plt.savefig("boxplot_patient_level.png", dpi=300)
+plt.show()
