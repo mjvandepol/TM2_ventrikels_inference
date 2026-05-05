@@ -49,4 +49,4 @@ axes[1].set_xticklabels(structures, rotation=45, ha='right')
 axes[1].set_ylim(0, 1.05)
 
 plt.tight_layout()
-plt.show()
+plt.savefig("dsc_nsd_plot.png", dpi=300, bbox_inches='tight')
