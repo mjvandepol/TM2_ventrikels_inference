@@ -1,4 +1,4 @@
-# Fold-based evaluation for model v1.0, T2 
+# This file conducts a Fold-based evaluation for model v1.0, T2 
 
 import os
 import numpy as np
@@ -9,6 +9,7 @@ import pandas as pd
 BASE_DIR = "/data/scratch/r116411/data/inference_validatie_model1.0_v2/Results_inference_model1.0/"
 GT_DIR   = "/data/scratch/r116411/data/nnUNet_raw/Dataset001_Brain_T2/labelsTr/"
 
+#Make 1 excel for both models 
 OUTPUT_EXCEL = BASE_DIR + "fold_evaluation_model_v1.0.xlsx"
 
 LABELS = {
@@ -23,6 +24,7 @@ def load_nifti(path):
     img = sitk.ReadImage(path)
     return sitk.GetArrayFromImage(img)
 
+#calculate Dice per label
 def dice(gt, pred, label):
     gt_bin = (gt == label)
     pred_bin = (pred == label)
@@ -33,10 +35,12 @@ def dice(gt, pred, label):
     inter = np.logical_and(gt_bin, pred_bin).sum()
     return 2 * inter / (gt_bin.sum() + pred_bin.sum())
 
+#Calculate Dice total
 def dice_total(gt, pred):
     gt_bin = (gt > 0)
     pred_bin = (pred > 0)
 
+    #Overlap between model prediction & GT 
     if gt_bin.sum() == 0 and pred_bin.sum() == 0:
         return np.nan
 
@@ -96,5 +100,4 @@ for fold in range(5):
 df = pd.DataFrame(rows)
 
 df.to_excel(OUTPUT_EXCEL, index=False)
-
 print(f"\nopgeslagen naar: {OUTPUT_EXCEL}")

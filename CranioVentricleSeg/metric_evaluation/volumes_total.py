@@ -1,4 +1,5 @@
-# This file fills in an excel with ventricle and brain volumes of model v1.0, v2.0 and ground truth
+# This file fills in an excel with ventricle and brain volumes of model v1.0, v2.0 and ground truth as overview of all volumes
+#Ground truth volumes are caclculated using volume_groundtruth.py
 
 import os
 import pandas as pd
@@ -33,6 +34,7 @@ for patient in os.listdir(BASE_DIR):
             "Brain volume": None,
         }
 
+        #Volume of ground truth
         if version == "Ground truth":
             files = os.listdir(GT_DIR)
             vent_file = None
@@ -64,6 +66,7 @@ for patient in os.listdir(BASE_DIR):
 
                     print(f"     GT values loaded: RV={row['RV']}")
 
+        #Volume of model 1.0 and 2.0
         else:
             vent_file = os.path.join(
                 t2w_path, f"ventricle_volume_{version}_nomirror.xlsx"

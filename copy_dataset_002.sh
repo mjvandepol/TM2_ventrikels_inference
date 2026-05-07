@@ -1,5 +1,7 @@
-#!/bin/bash
 
+#This file is used to copy data from the train_002 folder to the nnU-Net data_raw folder 
+
+#!/bin/bash
 
 src_base="/data/scratch/r116411/ventricle_segmentation_train_test_t2/train_002"
 dst_base="/data/scratch/r116411/data/nnUNet_raw/Dataset002_Brain_T2"
@@ -56,7 +58,7 @@ for patient_path in "$src_base"/*; do
         label_src="${gz_labels[0]}"
     fi
 
-    # indien .nii → maak .nii.gz in originele map (origineel blijft bestaan)
+    # indien .nii, maak .nii.gz in originele map (origineel blijft)
     if [[ "$label_src" != *.gz ]]; then
         if [ ! -f "${label_src}.gz" ]; then
             echo "Maak .nii.gz in originele map: $label_src"

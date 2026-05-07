@@ -1,4 +1,4 @@
-# Fold-based evaluation for model v2.0, T2
+# This file conducts a Fold-based evaluation for model v2.0, T2 
 
 import os
 import numpy as np
@@ -7,6 +7,8 @@ import pandas as pd
 
 BASE_DIR = "/data/scratch/r116411/data/nnUNet_results/Dataset002_Brain_T2/nnUNetTrainer__nnUNetPlans__3d_fullres/"
 GT_DIR   = "/data/scratch/r116411/data/nnUNet_raw/Dataset002_Brain_T2/labelsTr/"
+
+#New tabblad in fold evaluation xlsx
 OUTPUT_EXCEL = BASE_DIR + "fold_evaluation_model_v2.0.xlsx"
 
 LABELS = {
@@ -46,6 +48,7 @@ rows = []
 
 for fold in range(5):
 
+    #Open the files in the validation folder
     pred_dir = os.path.join(BASE_DIR, f"fold_{fold}", "validation")  
 
     print(f"\nProcessing fold_{fold}")
@@ -90,5 +93,4 @@ for fold in range(5):
 df = pd.DataFrame(rows)
 
 df.to_excel(OUTPUT_EXCEL, index=False)
-
 print(f"\nopgeslagen naar: {OUTPUT_EXCEL}")

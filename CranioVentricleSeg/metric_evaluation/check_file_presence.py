@@ -1,4 +1,4 @@
-#This file checks the presence of the segmentation and volume files of as well model v1 and v2 of the test data 
+#This file checks the presence of the segmentation and volume files of as well model v1 and v2 of the test data
 
 import os
 

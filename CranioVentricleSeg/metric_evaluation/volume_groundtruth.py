@@ -1,4 +1,5 @@
 #This file calculates the volume of the ground truth (manual) segmentations of the test set
+#Used in the calculation of AVE and RVE scores of the model 
 
 import logging
 import numpy as np
@@ -64,7 +65,7 @@ def calculate_ventricle_volume(
     volume_voxel = dimensions_voxel[0] * dimensions_voxel[1] * dimensions_voxel[2] #volume = xyz
     image_data = image_data.astype(np.int32)
 
-    #aantal voxels dat bij ventrikel hoort (==1 / 2 label etc) * volume ventrikel 
+    #aantal voxels dat bij ventrikel hoort (==1 / 2 label etc) * volume ventrikel
     voxels_right   = np.sum(image_data == 1)
     voxels_third   = np.sum(image_data == 2)
     voxels_fourth  = np.sum(image_data == 3)
@@ -126,7 +127,7 @@ def calculate_ventricle_volume(
     logger.info(f"Ventricle volume (ml): {new_row}")
 
 
-#run for test data
+#Run on the test ground truth data
 if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
